@@ -13,9 +13,10 @@ esp-x/
 
 # ===== 项目生成物（不要入库） =====
 # 字模（用 gen_font.py 生成）
-esp/www/fonts/*.bin
-esp/www/fonts/*.idx
-esp/www/fonts/*.map
+esp/www/fonts/*
+!esp/www/fonts/base_*
+!esp/www/fonts/.gitkeep
+
 esp/sd/fonts/*.bin
 esp/sd/fonts/*.idx
 esp/sd/fonts/*.map

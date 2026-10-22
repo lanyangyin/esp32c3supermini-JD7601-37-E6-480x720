@@ -250,25 +250,28 @@ REPL 会打印访问地址：
 
 ```
 esp32c3supermini-JD7601-37-E6-480x720/
-├── esp/                    设备端代码
-│   ├── boot.py             启动入口：挂载 SD
-│   ├── main.py             编排：模式检测 → WiFi → 显示 → Web
-│   ├── boot_screen.py      开机模式（GPIO20/21）
-│   ├── jd7601.py           墨水屏驱动（SoftSPI）
-│   ├── sd_helper.py        SD 卡挂载
-│   ├── mosaic.py           网格拼图（流式）
-│   ├── text_renderer.py    文字渲染核心（v2/v3/v4 字体）
-│   ├── text_console.py     文字渲染接口
-│   ├── web_server.py       HTTP 服务器
-│   ├── wifi_manager.py     WiFi 管理
-│   ├── build_font_index.py 字体索引生成
-│   ├── test_gpio.py        GPIO 诊断
-│   └── www/                Web 资源（HTML/JS + 字体）
-├── pc/                     PC 端独立工具（离线 HTML）
-├── e6_image_core/          图片处理核心（Python）
-├── gen_font.py             TTF → 字模生成器
-├── build_esp.py            构建工具（py→mpy、minify）
-├── docs/                   扩展文档（见下方）
+├── esp/ 设备端代码（MicroPython）
+│ ├── boot.py 启动入口：挂载 SD
+│ ├── main.py 编排：模式检测 → WiFi → 显示 → Web
+│ ├── boot_screen.py 开机模式（GPIO20/21）
+│ ├── jd7601.py 墨水屏驱动（SoftSPI）
+│ ├── sd_helper.py SD 卡挂载
+│ ├── mosaic.py 网格拼图（流式）
+│ ├── text_renderer.py 文字渲染核心（v2/v3/v4 字体）
+│ ├── text_console.py 文字渲染接口
+│ ├── web_server.py HTTP 服务器
+│ ├── wifi_manager.py WiFi 管理
+│ ├── build_font_index.py 字体索引生成
+│ ├── test_gpio.py GPIO 诊断
+│ └── www/ Web 资源（HTML/JS + 字体）
+├── pc/ PC 端离线 HTML（见 docs/pc-tools.md）
+├── e6_image_core/ PC 端图片处理核心（Qt 工具共用）
+├── e6_tool.py Qt 桌面版：图片转换
+├── e6_editor.py Qt 桌面版：BIN 编辑
+├── e6_studio.py Qt 桌面版：一体化（转换 + 编辑 + 上传）
+├── gen_font.py TTF → 字模生成器
+├── build_esp.py 构建工具（py→mpy、minify）
+├── docs/ 扩展文档（见下方）
 └── README.md
 ```
 
@@ -284,6 +287,7 @@ esp32c3supermini-JD7601-37-E6-480x720/
 | docs/boot-modes.md | 四种模式时序图、指定 BIN 配置、REPL 调试方法、常见接线错误 |
 | docs/development.md | build_esp.py 构建、mpy-cross 版本匹配、调试技巧、扩展新功能的示例 |
 | docs/troubleshooting.md | 屏幕、缩略图、中文、网络、GPIO、内存等各类故障排查 |
+| docs/pc-tools.md | PC 端工具：离线 HTML、Qt 桌面客户端（`e6_tool.py` / `e6_editor.py` / `e6_studio.py`） |
 
 ## 常见问题
 
