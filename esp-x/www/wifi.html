@@ -1,0 +1,168 @@
+<!DOCTYPE html><html lang=zh><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"><title>网络设置 - E6 Panel</title><style>
+body{font-family:-apple-system,system-ui,sans-serif;max-width:520px;margin:20px auto;padding:0 12px;color:#222}
+h2{margin-bottom:8px}
+h3{margin-top:22px;border-bottom:1px solid #ddd;padding-bottom:4px;font-size:15px}
+button.btn{display:inline-block;margin:3px;padding:8px 14px;border-radius:4px;
+  text-decoration:none;color:#fff;font-size:14px;border:none;cursor:pointer;background:#555}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+#status{margin:10px 0;padding:8px 10px;background:#f4f4f4;border-radius:4px;
+  font-size:14px;color:#333;min-height:20px}
+
+.net-status{
+  background:#f7fbff;border:1px solid #cfe3f6;
+  border-radius:10px;padding:12px 14px;
+  font-size:13px;line-height:1.6;
+}
+.net-status .net-row{
+  display:flex;justify-content:space-between;
+  gap:12px;padding:4px 0;
+}
+.net-status .net-row:not(:last-child){
+  border-bottom:1px solid #e4eef8;
+}
+.net-status .label{color:#888;font-weight:500}
+.net-status .val{color:#222;font-weight:600;text-align:right;word-break:break-all}
+.net-status .val.ok{color:#0a7a0a}
+.net-status .val.err{color:#c00}
+.net-status .val.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace}
+
+.net-item{padding:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+.net-item:last-child{border-bottom:none}
+.rssi{color:#888;font-size:12px}
+input{width:100%;padding:6px;margin:4px 0;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}
+</style></head><body data-nav-layout=scroll><h2>网络设置</h2><div id=status>就绪</div><h3>当前连接</h3><div class=net-status id=currentNet><div class=net-row><span class=label>AP 热点</span><span class=val id=apInfo>检测中…</span></div><div class=net-row><span class=label>STA 上游</span><span class=val id=staInfo>检测中…</span></div></div><button class=btn onclick=refreshStatus() style=margin-top:6px>刷新状态</button><h3>已保存的网络（按优先级）</h3><div id=savedList></div><h3>扫描并添加</h3><button class=btn onclick=scan()>扫描 WiFi</button><div id=scanList></div><h3>手动添加</h3><input id=ssidInput placeholder=SSID><input id=pwdInput type=password placeholder=密码><input id=priorityInput type=number placeholder=优先级（1最高） value=1><button class=btn onclick=saveNetwork()>保存网络</button><script>
+const statusEl = document.getElementById('status');
+function setStatus(msg){ statusEl.textContent = msg; }
+
+async function refreshStatus(){
+  const apEl = document.getElementById('apInfo');
+  const staEl = document.getElementById('staInfo');
+  try{
+    const r = await fetch('/status', { cache: 'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const info = await r.json();
+
+    if(info.ap && info.ap.active){
+      const ssid = info.ap.ssid || 'E6-Panel';
+      apEl.innerHTML = escapeHtml(ssid) + '<br><span class="mono">' +
+        escapeHtml(info.ap.ip || '') + '</span>';
+      apEl.className = 'val mono ok';
+    } else {
+      apEl.textContent = '未开启';
+      apEl.className = 'val err';
+    }
+
+    if(info.sta && info.sta.connected){
+      const ssid = info.sta.ssid || 'WiFi';
+      const rssi = (info.sta.rssi !== null && info.sta.rssi !== undefined)
+        ? ' · ' + info.sta.rssi + ' dBm' : '';
+      staEl.innerHTML = escapeHtml(ssid) + rssi + '<br><span class="mono">' +
+        escapeHtml(info.sta.ip || '') + '</span>';
+      staEl.className = 'val mono ok';
+    } else {
+      staEl.textContent = '未连接';
+      staEl.className = 'val err';
+    }
+  }catch(e){
+    apEl.textContent = '读取失败';
+    staEl.textContent = '读取失败';
+    apEl.className = 'val err';
+    staEl.className = 'val err';
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[c]);
+}
+
+async function loadSaved(){
+  try{
+    const r = await fetch('/wifi/list');
+    const nets = await r.json();
+    const list = document.getElementById('savedList');
+    list.innerHTML = '';
+    if(!nets.length){
+      list.innerHTML = '<p style="color:#888">暂无保存的网络</p>';
+      return;
+    }
+    nets.forEach((n) => {
+      const div = document.createElement('div');
+      div.className = 'net-item';
+      div.innerHTML = '<span><b>' + escapeHtml(n.ssid) +
+        '</b> <span class="rssi">(优先级 ' + n.priority + ')</span></span>';
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = '删除';
+      btn.onclick = () => deleteNetwork(n.ssid);
+      div.appendChild(btn);
+      list.appendChild(div);
+    });
+  }catch(e){
+    setStatus('读取已保存网络失败');
+  }
+}
+
+async function scan(){
+  setStatus('扫描中…');
+  try{
+    const r = await fetch('/wifi/scan');
+    const nets = await r.json();
+    const list = document.getElementById('scanList');
+    list.innerHTML = '';
+    nets.forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'net-item';
+      div.innerHTML = '<span>' + escapeHtml(n.ssid) +
+        ' <span class="rssi">' + n.rssi + ' dBm</span></span>';
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = '使用';
+      btn.onclick = () => {
+        document.getElementById('ssidInput').value = n.ssid;
+        setStatus('已选择 ' + n.ssid + '，请输入密码后保存');
+      };
+      div.appendChild(btn);
+      list.appendChild(div);
+    });
+    setStatus('扫描完成，找到 ' + nets.length + ' 个网络');
+  }catch(e){
+    setStatus('扫描失败：' + e);
+  }
+}
+
+async function saveNetwork(){
+  const ssid = document.getElementById('ssidInput').value.trim();
+  const pwd = document.getElementById('pwdInput').value;
+  const priority = parseInt(document.getElementById('priorityInput').value) || 1;
+  if(!ssid){ setStatus('请输入 SSID'); return; }
+  setStatus('保存中…');
+  try{
+    const r = await fetch('/wifi/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ssid, password: pwd, priority})
+    });
+    if(r.ok){ setStatus('保存成功，重启后生效'); loadSaved(); }
+    else setStatus('保存失败');
+  }catch(e){ setStatus('保存失败：' + e); }
+}
+
+async function deleteNetwork(ssid){
+  if(!confirm('删除 ' + ssid + '？')) return;
+  try{
+    const r = await fetch('/wifi/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ssid})
+    });
+    if(r.ok){ setStatus('已删除'); loadSaved(); }
+    else setStatus('删除失败');
+  }catch(e){ setStatus('删除失败：' + e); }
+}
+
+refreshStatus();
+loadSaved();
+setInterval(refreshStatus, 10000);
+</script><script src=/nav.js></script></body></html>

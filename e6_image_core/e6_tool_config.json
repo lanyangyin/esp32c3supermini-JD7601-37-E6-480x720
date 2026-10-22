@@ -1,0 +1,91 @@
+{
+  "exposure": -49,
+  "saturation": 23,
+  "contrast": 6,
+  "clarity": 61,
+  "shadow": 38,
+  "highlight": 0,
+  "fit_index": 0,
+  "palette_name": "设备实测",
+  "dither_index": 0,
+  "serpentine": true,
+  "device_ip": "192.168.8.240",
+  "palettes": {
+    "设备实测": [
+      {
+        "name": "黑",
+        "color": "#020202",
+        "deviceColor": "#000000",
+        "index": 0
+      },
+      {
+        "name": "白",
+        "color": "#bec8c8",
+        "deviceColor": "#FFFFFF",
+        "index": 1
+      },
+      {
+        "name": "黄",
+        "color": "#cdca00",
+        "deviceColor": "#FFFF00",
+        "index": 2
+      },
+      {
+        "name": "红",
+        "color": "#871300",
+        "deviceColor": "#FF0000",
+        "index": 3
+      },
+      {
+        "name": "蓝",
+        "color": "#05409e",
+        "deviceColor": "#0000FF",
+        "index": 5
+      },
+      {
+        "name": "绿",
+        "color": "#27663c",
+        "deviceColor": "#00FF00",
+        "index": 6
+      }
+    ],
+    "Spectra 6 校准": [
+      {
+        "name": "black",
+        "color": "#020202",
+        "deviceColor": "#000000",
+        "index": 0
+      },
+      {
+        "name": "white",
+        "color": "#BEC8C8",
+        "deviceColor": "#FFFFFF",
+        "index": 1
+      },
+      {
+        "name": "yellow",
+        "color": "#CDCA00",
+        "deviceColor": "#FFFF00",
+        "index": 2
+      },
+      {
+        "name": "red",
+        "color": "#871300",
+        "deviceColor": "#FF0000",
+        "index": 3
+      },
+      {
+        "name": "blue",
+        "color": "#05409E",
+        "deviceColor": "#0000FF",
+        "index": 5
+      },
+      {
+        "name": "green",
+        "color": "#27663C",
+        "deviceColor": "#00FF00",
+        "index": 6
+      }
+    ]
+  }
+}
