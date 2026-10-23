@@ -25,6 +25,10 @@ COLOR_NAMES = {
     "red": 3, "blue": 4, "green": 5,
 }
 
+# 字间距钳制范围（宽松上限，前端 UI 更窄）
+_LS_MIN = -100
+_LS_MAX = 200
+
 
 def _make_bytearray_fill(n, value=0):
     b = bytearray(n)
@@ -512,7 +516,7 @@ def _evict_if_needed():
 
 def _detect_version(path):
     try:
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             h = f.read(1)
         return h[0] if h else 0
     except Exception:
@@ -676,9 +680,10 @@ def _parse_default_style(default_style):
     if default_style is None:
         default_style = {}
     try:
-        letter_spacing = int(default_style.get('letter_spacing', 0))
+        letter_spacing = int(round(float(default_style.get('letter_spacing', 0))))
     except (TypeError, ValueError):
         letter_spacing = 0
+    letter_spacing = max(_LS_MIN, min(_LS_MAX, letter_spacing))
     return {
         'fg': parse_color_spec(default_style.get('fg', 'black')),
         'bg': parse_color_spec(default_style.get('bg', 'white')),
@@ -708,7 +713,8 @@ def _parse_per_char(per_char, ds):
                     m[field] = bool(value)
                 elif field == 'letterSpacing':
                     try:
-                        m['letter_spacing'] = int(value)
+                        m['letter_spacing'] = max(_LS_MIN, min(_LS_MAX,
+                            int(round(float(value)))))
                     except (TypeError, ValueError):
                         pass
                 elif field == 'font_paths':
@@ -728,12 +734,12 @@ def _get_char_font(default_font, style, temp_fonts):
 
 
 def _style_ls(style):
-    """从 style 取 letter_spacing（安全类型检查）。"""
+    """从 style 取 letter_spacing（安全类型检查 + 四舍五入 + 范围钳制）。"""
     if not isinstance(style, dict):
         return 0
     v = style.get('letter_spacing', 0)
     try:
-        return int(v)
+        return max(_LS_MIN, min(_LS_MAX, int(round(float(v)))))
     except (TypeError, ValueError):
         return 0
 

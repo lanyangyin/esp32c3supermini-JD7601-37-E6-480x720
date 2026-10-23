@@ -104,6 +104,7 @@
   "direction": "vertical-rl",
   "align": "left",
   "line_height_x10": 18,
+  "letter_spacing": 0,
   "rotate": 0,
   "text_bold": false,
   "text_italic": false,

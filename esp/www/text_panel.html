@@ -430,6 +430,9 @@
           <option value="">（使用全局）</option>
         </select>
       </label>
+      <label style="margin-top:6px">字符字间距覆盖（px，留空跟随全局）
+        <input type="number" id="charLetterSpacing" min="-30" max="60" step="1" placeholder="留空跟随全局">
+      </label>
       <div class="info">只影响选中的字符，不选则跟随全局设置。</div>
     </div>
 
@@ -448,7 +451,7 @@
   <fieldset style="grid-column:1/-1">
     <legend>间距 / 行设置</legend>
     <div class="row-2">
-      <label>全局字间距（px，可负）
+      <label>全局字间距（px，整数，可负）
         <input type="number" id="letterSpacing" value="0" min="-30" max="60" step="1">
       </label>
       <label>说明
@@ -1891,6 +1894,12 @@ function refreshCharFontBox(){
   } else {
     sel.value = '';
   }
+
+  // 回填逐字符字间距
+  const lsInput = $('charLetterSpacing');
+  const curLs = ov && ov.letterSpacing !== undefined ? ov.letterSpacing : '';
+  lsInput.value = curLs === '' ? '' : String(curLs);
+  lsInput.placeholder = '留空跟随全局';
 }
 
 async function loadBgsList(){
@@ -2210,7 +2219,8 @@ async function doRender(){
 
     const opts = {
       lineHeight: Math.max(0, parseFloat($('lineHeight').value) || 0),
-      letterSpacing: parseFloat($('letterSpacing').value) || 0,
+      // 与 doApply 保持一致：整数
+      letterSpacing: parseInt($('letterSpacing').value, 10) || 0,
       lineExtras,
       align: $('alignSelect').value,
       valign: $('valignSelect').value,
@@ -2488,6 +2498,19 @@ function bindEvents(){
       if (!perChar[idx]) perChar[idx] = {};
       if (key) perChar[idx].fontKey = key;
       else delete perChar[idx].fontKey;
+    });
+    renderChars();
+    scheduleRender();
+  });
+
+  $('charLetterSpacing').addEventListener('input', () => {
+    if (selectedChars.size === 0) return;
+    const raw = $('charLetterSpacing').value.trim();
+    const v = raw === '' ? null : parseInt(raw, 10);
+    selectedChars.forEach(idx => {
+      if (!perChar[idx]) perChar[idx] = {};
+      if (v === null || isNaN(v)) delete perChar[idx].letterSpacing;
+      else perChar[idx].letterSpacing = v;
     });
     renderChars();
     scheduleRender();

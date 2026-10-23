@@ -167,7 +167,7 @@ def indices_to_pil(indices):
 def render_text_image(text, family, size, bold, italic, underline,
                       direction, align, line_height, rotate_deg,
                       anchor=(0, 0), color="#FFFFFF",
-                      canvas_w=W, canvas_h=H):
+                      canvas_w=W, canvas_h=H, letter_spacing=0):
     if not text:
         return None
 
@@ -199,24 +199,36 @@ def render_text_image(text, family, size, bold, italic, underline,
 
     if direction == "horizontal":
         for i, line in enumerate(lines):
-            lw = fm.horizontalAdvance(line)
+            chars = list(line)
+            # 计算整行宽度（最后一个字符不加字间距）
+            total_w = 0.0
+            for j, ch in enumerate(chars):
+                total_w += fm.horizontalAdvance(ch)
+                if j < len(chars) - 1:
+                    total_w += letter_spacing
+
             if align == "left":
-                dx = 0
+                dx = 0.0
             elif align == "center":
-                dx = -lw / 2
+                dx = -total_w / 2
             else:
-                dx = -lw
+                dx = -total_w
 
             dy = i * line_h_px + fm.ascent()
 
             if line:
-                painter.drawText(QPointF(dx, dy), line)
+                cx = dx
+                for ch in chars:
+                    painter.drawText(QPointF(cx, dy), ch)
+                    cx += fm.horizontalAdvance(ch) + letter_spacing
 
             if underline and line:
                 ul_y = i * line_h_px + size * 0.9
-                painter.fillRect(int(dx), int(ul_y), int(lw), ul_thick, color_obj)
+                painter.fillRect(int(dx), int(ul_y),
+                                 int(total_w), ul_thick, color_obj)
     else:
-        col_w = line_h_px
+        # 竖排：字间距表现为"列间距 + 列内字符步进"
+        col_w = max(1, line_h_px + letter_spacing)
         total_w = len(lines) * col_w
 
         if align == "left":
@@ -254,7 +266,8 @@ def render_text_image(text, family, size, bold, italic, underline,
     return img
 
 
-def measure_text_bbox(family, size, bold, italic, direction, text, line_height):
+def measure_text_bbox(family, size, bold, italic, direction, text,
+                      line_height, letter_spacing=0):
     font = QFont(family)
     font.setPixelSize(size)
     font.setBold(bold)
@@ -263,13 +276,23 @@ def measure_text_bbox(family, size, bold, italic, direction, text, line_height):
 
     lines = text.split("\n") if text else [""]
     if direction == "horizontal":
-        max_w = max((fm.horizontalAdvance(line) for line in lines), default=1)
+        max_w = 0.0
+        for line in lines:
+            chars = list(line)
+            w = 0.0
+            for j, ch in enumerate(chars):
+                w += fm.horizontalAdvance(ch)
+                if j < len(chars) - 1:
+                    w += letter_spacing
+            if w > max_w:
+                max_w = w
         h = max(1, len(lines) * size * line_height)
         return max(1, max_w), h
     else:
-        max_chars = max((len(line) for line in lines), default=1)
-        w = max(1, len(lines) * size * line_height)
-        h = max(1, max_chars * size * line_height)
+        col_w = max(1, size * line_height + letter_spacing)
+        max_chars = max((len(l) for l in lines), default=1)
+        w = max(1, len(lines) * col_w)
+        h = max(1, max_chars * col_w)
         return w, h
 
 
@@ -409,7 +432,7 @@ class TextPreviewWidget(QWidget):
         bw, bh = measure_text_bbox(
             params["family"], params["size"], params["bold"],
             params["italic"], params["direction"], text,
-            params["line_height"],
+            params["line_height"], params["letter_spacing"],
         )
         rot = abs(params["rotate"]) * math.pi / 180
         cos_v, sin_v = abs(math.cos(rot)), abs(math.sin(rot))
@@ -438,6 +461,7 @@ class TextPreviewWidget(QWidget):
             params["align"], params["line_height"], params["rotate"],
             anchor=anchor, color="#FFFFFF",
             canvas_w=W, canvas_h=H,
+            letter_spacing=params["letter_spacing"],
         )
         if img is None:
             return
@@ -790,6 +814,19 @@ class EditorWindow(QMainWindow):
         lh_row.addWidget(self.lbl_line_height)
         tgl.addLayout(lh_row)
 
+        # ★ 字间距
+        ls_row = QHBoxLayout()
+        ls_row.addWidget(QLabel("字间距:"))
+        self.sld_letter_spacing = QSlider(Qt.Horizontal)
+        self.sld_letter_spacing.setRange(-20, 40)
+        self.sld_letter_spacing.setValue(0)
+        self.sld_letter_spacing.valueChanged.connect(self._on_letter_spacing_changed)
+        ls_row.addWidget(self.sld_letter_spacing, 1)
+        self.lbl_letter_spacing = QLabel("0")
+        self.lbl_letter_spacing.setFixedWidth(36)
+        ls_row.addWidget(self.lbl_letter_spacing)
+        tgl.addLayout(ls_row)
+
         rot_row = QHBoxLayout()
         rot_row.addWidget(QLabel("旋转:"))
         self.sld_rotate = QSlider(Qt.Horizontal)
@@ -944,6 +981,10 @@ class EditorWindow(QMainWindow):
         self.lbl_line_height.setText(f"{lh:.1f}")
         self._on_text_param_changed()
 
+    def _on_letter_spacing_changed(self, v):
+        self.lbl_letter_spacing.setText(str(v))
+        self._on_text_param_changed()
+
     def _on_rotate_changed(self, v):
         self.lbl_rotate.setText(f"{v}°")
         self._on_text_param_changed()
@@ -967,6 +1008,7 @@ class EditorWindow(QMainWindow):
             "direction": self.cmb_dir.currentData(),
             "align": self.cmb_align.currentData(),
             "line_height": self.sld_line_height.value() / 10.0,
+            "letter_spacing": int(self.sld_letter_spacing.value()),
             "rotate": self.sld_rotate.value(),
         }
 
@@ -1075,6 +1117,7 @@ class EditorWindow(QMainWindow):
             p["text"], p["family"], p["size"], p["bold"], p["italic"],
             p["underline"], p["direction"], p["align"], p["line_height"],
             p["rotate"], anchor=(x, y), color="#75C7BD",
+            letter_spacing=p["letter_spacing"],
         )
         if img is not None:
             self.canvas.set_overlay(img)
@@ -1146,6 +1189,7 @@ class EditorWindow(QMainWindow):
             p["text"], p["family"], p["size"], p["bold"], p["italic"],
             p["underline"], p["direction"], p["align"], p["line_height"],
             p["rotate"], anchor=(x, y), color="#FFFFFF",
+            letter_spacing=p["letter_spacing"],
         )
         if img is None:
             return False
@@ -1416,6 +1460,7 @@ class EditorWindow(QMainWindow):
                 break
 
         self.sld_line_height.setValue(cfg.get("line_height_x10", 12))
+        self.sld_letter_spacing.setValue(cfg.get("letter_spacing", 0))
         self.sld_rotate.setValue(cfg.get("rotate", 0))
 
         # B / I / U
@@ -1487,6 +1532,7 @@ class EditorWindow(QMainWindow):
             "direction": self.cmb_dir.currentData(),
             "align": self.cmb_align.currentData(),
             "line_height_x10": self.sld_line_height.value(),
+            "letter_spacing": self.sld_letter_spacing.value(),
             "rotate": self.sld_rotate.value(),
 
             "current_tool": self.current_tool,

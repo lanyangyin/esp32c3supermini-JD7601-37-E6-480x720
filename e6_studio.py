@@ -90,12 +90,6 @@ def _read_json(path):
 
 
 def _find_configs(basename):
-    """
-    某类配置文件的所有候选位置（按优先级从低到高）：
-      ~/.xxx         （家目录隐藏文件，最旧，最低）
-      _THIS_DIR/xxx  （项目根目录）
-      CORE_DIR/xxx   （e6_image_core，最高）
-    """
     return [
         Path.home() / f".{basename}",
         _THIS_DIR / basename,
@@ -104,7 +98,6 @@ def _find_configs(basename):
 
 
 def _validate_palette_list(colors):
-    """校验调色板颜色列表结构"""
     if not isinstance(colors, list) or len(colors) == 0:
         return False
     for c in colors:
@@ -117,19 +110,11 @@ def _validate_palette_list(colors):
 
 
 def load_config():
-    """
-    1. e6_image_core/e6_studio_config.json 存在 → 只读它，绝不合并其他来源
-    2. 不存在 → 从 tool + editor 配置合并（同一文件按 core > 项目根 > 家目录 优先），
-       写入 studio config，之后启动不再合并
-    """
-    # 1. studio config 已存在 → 直接返回
     if CONFIG_PATH.exists():
         data = _read_json(CONFIG_PATH)
         if data:
             return data
-        # 文件损坏/空 → 继续走合并逻辑
 
-    # 2. 从 tool + editor 合并
     merged = {}
     for basename in ("e6_tool_config.json", "e6_editor_config.json"):
         for path in _find_configs(basename):
@@ -137,7 +122,6 @@ def load_config():
             if data:
                 merged.update(data)
 
-    # 3. 写入 studio config
     if merged:
         save_config(merged)
         print(f"[config] created {CONFIG_PATH} from tool/editor configs")
@@ -290,7 +274,8 @@ def indices_to_qimage_calibrated(indices, palette):
 
 # ================= 文字渲染 =================
 
-def measure_text_bbox(family, size, bold, italic, direction, text, line_height):
+def measure_text_bbox(family, size, bold, italic, direction, text,
+                      line_height, letter_spacing=0):
     font = QFont(family)
     font.setPixelSize(size)
     font.setBold(bold)
@@ -298,18 +283,29 @@ def measure_text_bbox(family, size, bold, italic, direction, text, line_height):
     fm = QFontMetrics(font)
     lines = text.split("\n") if text else [""]
     if direction == "horizontal":
-        max_w = max((fm.horizontalAdvance(l) for l in lines), default=1)
+        max_w = 0.0
+        for line in lines:
+            chars = list(line)
+            w = 0.0
+            for j, ch in enumerate(chars):
+                w += fm.horizontalAdvance(ch)
+                if j < len(chars) - 1:
+                    w += letter_spacing
+            if w > max_w:
+                max_w = w
         h = max(1, len(lines) * size * line_height)
         return max(1, max_w), h
     else:
+        col_w = max(1, size * line_height + letter_spacing)
         max_chars = max((len(l) for l in lines), default=1)
-        w = max(1, len(lines) * size * line_height)
-        h = max(1, max_chars * size * line_height)
+        w = max(1, len(lines) * col_w)
+        h = max(1, max_chars * col_w)
         return w, h
 
 
 def render_text_mask(text, family, size, bold, italic, underline,
-                     direction, align, line_height, rotate_deg, anchor):
+                     direction, align, line_height, rotate_deg, anchor,
+                     letter_spacing=0):
     img = QImage(W, H, QImage.Format_ARGB32)
     img.fill(0)
     if not text:
@@ -339,16 +335,35 @@ def render_text_mask(text, family, size, bold, italic, underline,
 
     if direction == "horizontal":
         for i, line in enumerate(lines):
-            lw = fm.horizontalAdvance(line)
-            dx = 0 if align == "left" else (-lw / 2 if align == "center" else -lw)
+            chars = list(line)
+            # 逐字符宽度累加（最后一个字符不加字间距）
+            total_w = 0.0
+            for j, ch in enumerate(chars):
+                total_w += fm.horizontalAdvance(ch)
+                if j < len(chars) - 1:
+                    total_w += letter_spacing
+
+            if align == "left":
+                dx = 0.0
+            elif align == "center":
+                dx = -total_w / 2
+            else:
+                dx = -total_w
+
             dy = i * line_h + fm.ascent()
+
             if line:
-                p.drawText(QPointF(dx, dy), line)
+                cx = dx
+                for ch in chars:
+                    p.drawText(QPointF(cx, dy), ch)
+                    cx += fm.horizontalAdvance(ch) + letter_spacing
+
             if underline and line:
                 ul_y = i * line_h + size * 0.9
-                p.fillRect(int(dx), int(ul_y), int(lw), ul_thick, white)
+                p.fillRect(int(dx), int(ul_y), int(total_w), ul_thick, white)
     else:
-        col_w = line_h
+        # 竖排：字间距作用于列间距和列内字符步进
+        col_w = max(1, line_h + letter_spacing)
         total_w = len(lines) * col_w
         block_x = 0.0 if align == "left" else (-total_w / 2 if align == "center" else -total_w)
         for ci, line in enumerate(lines):
@@ -370,7 +385,8 @@ def render_text_mask(text, family, size, bold, italic, underline,
                     ul_x = col_cx + max_cw / 2 + 1
                     ul_y1 = col_w * 0.1
                     ul_y2 = len(clean) * col_w - col_w * 0.1
-                    p.fillRect(int(ul_x), int(ul_y1), ul_thick, int(ul_y2 - ul_y1), white)
+                    p.fillRect(int(ul_x), int(ul_y1),
+                               ul_thick, int(ul_y2 - ul_y1), white)
     p.end()
     return img
 
@@ -713,6 +729,7 @@ class TextPreviewWidget(QWidget):
         bw, bh = measure_text_bbox(
             params["family"], params["size"], params["bold"], params["italic"],
             params["direction"], text, params["line_height"],
+            params["letter_spacing"],
         )
         rot = abs(params["rotate"]) * math.pi / 180
         cos_v = abs(math.cos(rot))
@@ -740,6 +757,7 @@ class TextPreviewWidget(QWidget):
             text, params["family"], params["size"], params["bold"], params["italic"],
             params["underline"], params["direction"], params["align"],
             params["line_height"], params["rotate"], anchor=anchor,
+            letter_spacing=params["letter_spacing"],
         )
 
         p.save()
@@ -1246,6 +1264,19 @@ class MainWindow(QMainWindow):
         self.lbl_lh.setFixedWidth(36)
         lh_row.addWidget(self.lbl_lh)
         tgl.addLayout(lh_row)
+
+        # ★ 字间距
+        ls_row = QHBoxLayout()
+        ls_row.addWidget(QLabel("字间距:"))
+        self.sld_ls = QSlider(Qt.Horizontal)
+        self.sld_ls.setRange(-20, 40)
+        self.sld_ls.setValue(0)
+        self.sld_ls.valueChanged.connect(self._on_text_param_changed)
+        ls_row.addWidget(self.sld_ls, 1)
+        self.lbl_ls = QLabel("0")
+        self.lbl_ls.setFixedWidth(36)
+        ls_row.addWidget(self.lbl_ls)
+        tgl.addLayout(ls_row)
 
         rot_row = QHBoxLayout()
         rot_row.addWidget(QLabel("旋转:"))
@@ -1758,7 +1789,6 @@ class MainWindow(QMainWindow):
             if self.source_choice in ("dithered", "bin"):
                 self._rebuild_bin_image()
             self.schedule_refresh()
-            # 立即持久化调色板修改
             self._save_current_config()
             self.statusBar().showMessage(f"调色板「{name}」已更新并保存")
 
@@ -1887,6 +1917,7 @@ class MainWindow(QMainWindow):
             p["text"], p["family"], p["size"], p["bold"], p["italic"],
             p["underline"], p["direction"], p["align"], p["line_height"],
             p["rotate"], anchor=(x, y),
+            letter_spacing=p["letter_spacing"],
         )
         preview = QImage(mask.size(), QImage.Format_ARGB32)
         preview.fill(0)
@@ -1961,6 +1992,7 @@ class MainWindow(QMainWindow):
             "direction": self.cmb_dir.currentData(),
             "align": self.cmb_align.currentData(),
             "line_height": self.sld_lh.value() / 10.0,
+            "letter_spacing": int(self.sld_ls.value()),
             "rotate": self.sld_rot.value(),
         }
 
@@ -1972,6 +2004,7 @@ class MainWindow(QMainWindow):
             p["text"], p["family"], p["size"], p["bold"], p["italic"],
             p["underline"], p["direction"], p["align"], p["line_height"],
             p["rotate"], anchor=(x, y),
+            letter_spacing=p["letter_spacing"],
         )
         count = 0
         for py in range(H):
@@ -1997,6 +2030,7 @@ class MainWindow(QMainWindow):
 
     def _on_text_param_changed(self):
         self.lbl_lh.setText(f"{self.sld_lh.value() / 10:.1f}")
+        self.lbl_ls.setText(str(self.sld_ls.value()))
         self.lbl_rot.setText(f"{self.sld_rot.value()}°")
         if hasattr(self, "text_preview"):
             self.text_preview.update()
@@ -2294,6 +2328,7 @@ class MainWindow(QMainWindow):
                 self.cmb_align.setCurrentIndex(i)
                 break
         self.sld_lh.setValue(cfg.get("line_height_x10", 12))
+        self.sld_ls.setValue(cfg.get("letter_spacing", 0))
         self.sld_rot.setValue(cfg.get("rotate", 0))
 
         self.btn_bold.setChecked(cfg.get("text_bold", False))
@@ -2336,7 +2371,6 @@ class MainWindow(QMainWindow):
             "device_ip": self.edit_ip.text().strip(),
             "zoom": self.sld_zoom.value(),
 
-            # 关键：保存调色板
             "palettes": copy.deepcopy(current_palettes),
 
             "bg_color_idx": self.bg_color_idx,
@@ -2350,6 +2384,7 @@ class MainWindow(QMainWindow):
             "direction": self.cmb_dir.currentData(),
             "align": self.cmb_align.currentData(),
             "line_height_x10": self.sld_lh.value(),
+            "letter_spacing": self.sld_ls.value(),
             "rotate": self.sld_rot.value(),
             "text_bold": self.btn_bold.isChecked(),
             "text_italic": self.btn_italic.isChecked(),
@@ -2365,7 +2400,6 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape and self.text_mode_active:
             self.text_mode_active = False
-
             self.canvas.clear_overlay()
             self.statusBar().showMessage("已取消文字放置")
             return

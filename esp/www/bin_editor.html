@@ -321,6 +321,12 @@
       </div>
 
       <div class="slider-row">
+        <span style="font-size:12px;color:var(--muted);font-weight:650">字间距</span>
+        <input type="range" id="letterSpacingSlider" min="-20" max="40" step="1" value="0">
+        <output id="letterSpacingVal">0</output>
+      </div>
+
+      <div class="slider-row">
         <span style="font-size:12px;color:var(--muted);font-weight:650">旋转</span>
         <input type="range" id="rotateSlider" min="-180" max="180" step="1" value="0">
         <output id="rotateVal">0°</output>
@@ -405,7 +411,6 @@ const DENSITIES = [
   { label:'75%', value:12 },
 ];
 
-// ---------- 双图层 ----------
 let binLayer = new Uint8Array(W * H);
 let drawLayer = new Uint8Array(W * H);
 binLayer.fill(TRANSPARENT);
@@ -446,7 +451,6 @@ let drawing = false;
 let lastX = -1, lastY = -1;
 let currentPointerId = null;
 
-// ---------- 合成 & 颜色 ----------
 function resolveIndex(x, y) {
   const i = y * W + x;
   let v = drawLayer[i];
@@ -464,7 +468,6 @@ function colorIndexForPixel(colorDef, x, y) {
   return 1;
 }
 
-// ---------- 渲染 ----------
 function requestRender() {
   if (renderPending) return;
   renderPending = true;
@@ -487,7 +490,6 @@ function render() {
   ctxMain.putImageData(img, 0, 0);
 }
 
-// ---------- 打包 / 解包 ----------
 function unpack(buf) {
   const out = new Uint8Array(W * H);
   let k = 0;
@@ -516,7 +518,6 @@ function packLayers() {
   return buf;
 }
 
-// ---------- 坐标 ----------
 function getCanvasCoord(e) {
   const rect = canvasMain.getBoundingClientRect();
   const x = Math.floor((e.clientX - rect.left) * W / rect.width);
@@ -524,7 +525,6 @@ function getCanvasCoord(e) {
   return { x: Math.max(0, Math.min(W - 1, x)), y: Math.max(0, Math.min(H - 1, y)) };
 }
 
-// ---------- 历史 ----------
 function saveHistory() {
   undoStack.push(snapshot());
   if (undoStack.length > MAX_HISTORY) undoStack.shift();
@@ -555,7 +555,6 @@ function redo() {
   setStatus('已重做');
 }
 
-// ---------- 绘制 ----------
 function paintPixelAt(x, y) {
   if (x < 0 || x >= W || y < 0 || y >= H) return;
   const i = y * W + x;
@@ -592,7 +591,6 @@ function drawLine(x0, y0, x1, y1) {
   }
 }
 
-// ---------- 吸管 ----------
 function pickColorAt(x, y) {
   const R = 5;
   const counts = new Array(6).fill(0);
@@ -635,7 +633,6 @@ function pickColorAt(x, y) {
   updateColorUI();
 }
 
-// ---------- 文字 ----------
 function getTextMetrics() {
   const text = $('textInput').value;
   const font = $('fontSelect').value;
@@ -647,50 +644,62 @@ function getTextMetrics() {
   const align = $('alignSelect').value;
   const direction = $('directionSelect').value;
   const lineHeight = parseFloat($('lineHeightSlider').value) || 1.2;
+  const letterSpacing = parseInt($('letterSpacingSlider').value, 10) || 0;
 
   const style = (italic ? 'italic ' : '') + (bold ? 'bold ' : '');
   const fontSpec = `${style}${size}px ${font}`;
-  return { text, fontSpec, size, underline, rotate, align, direction, lineHeight, bold, italic };
+  return { text, fontSpec, size, underline, rotate, align, direction,
+           lineHeight, bold, italic, letterSpacing };
 }
 
 function drawHorizontalText(ctx, m) {
   const lines = m.text.split('\n');
   const lineHeightPx = m.size * m.lineHeight;
+  const ls = m.letterSpacing || 0;
   const underlineThickness = Math.max(1, Math.round(m.size / 14));
   ctx.textBaseline = 'top';
-  ctx.textAlign = m.align;
+  ctx.textAlign = 'left';
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const ly = i * lineHeightPx;
-    if (line.length > 0) {
-      ctx.fillText(line, 0, ly);
+    const chars = Array.from(lines[i]);
+    if (chars.length === 0) continue;
+
+    // 计算整行宽度（最后一个字符不加字间距）
+    let lineW = 0;
+    for (let j = 0; j < chars.length; j++) {
+      lineW += ctx.measureText(chars[j]).width;
+      if (j < chars.length - 1) lineW += ls;
     }
-    if (m.underline && line.length > 0) {
-      const w = ctx.measureText(line).width;
-      if (w > 0) {
-        const underlineY = ly + m.size * 0.9;
-        let startX = 0;
-        if (m.align === 'center') startX = -w / 2;
-        else if (m.align === 'right') startX = -w;
-        ctx.fillRect(startX, underlineY, w, underlineThickness);
-      }
+
+    let startX = 0;
+    if (m.align === 'center') startX = -lineW / 2;
+    else if (m.align === 'right') startX = -lineW;
+
+    const ly = i * lineHeightPx;
+    let cx = startX;
+    for (let j = 0; j < chars.length; j++) {
+      ctx.fillText(chars[j], cx, ly);
+      cx += ctx.measureText(chars[j]).width + ls;
+    }
+
+    if (m.underline) {
+      ctx.fillRect(startX, ly + m.size * 0.9, lineW, underlineThickness);
     }
   }
 }
 
 function drawVerticalText(ctx, m) {
-  // 每个换行段是一列
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
 
   const lines = m.text.split('\n');
   const lineHeightPx = m.size * m.lineHeight;
-  const colWidth = lineHeightPx;
+  const ls = m.letterSpacing || 0;
+  // 竖排时，字间距表现为列间距
+  const colWidth = Math.max(1, lineHeightPx + ls);
   const totalWidth = lines.length * colWidth;
   const underlineThickness = Math.max(1, Math.round(m.size / 14));
 
-  // 文字块整体的水平偏移
   let offsetX = 0;
   if (m.align === 'center') offsetX = -totalWidth / 2;
   else if (m.align === 'right') offsetX = -totalWidth;
@@ -699,24 +708,20 @@ function drawVerticalText(ctx, m) {
     const line = lines[i];
     const chars = Array.from(line);
 
-    // 列中心 x
     let colCenterX;
     if (m.direction === 'vertical-lr') {
       colCenterX = offsetX + colWidth * (i + 0.5);
     } else {
-      // vertical-rl：第一列在最右
       colCenterX = offsetX + totalWidth - colWidth * (i + 0.5);
     }
 
-    // 逐字符绘制
     for (let j = 0; j < chars.length; j++) {
       const ch = chars[j];
       if (ch === ' ' || ch === '\t') continue;
-      const cy = j * lineHeightPx + lineHeightPx / 2;
+      const cy = j * colWidth + colWidth / 2;
       ctx.fillText(ch, colCenterX, cy);
     }
 
-    // 竖排下划线：整列右侧画一条竖线
     if (m.underline && chars.length > 0) {
       let maxCharW = 0;
       for (const ch of chars) {
@@ -724,8 +729,8 @@ function drawVerticalText(ctx, m) {
         if (w > maxCharW) maxCharW = w;
       }
       const lineX = colCenterX + maxCharW / 2 + 1;
-      const lineY1 = lineHeightPx * 0.1;
-      const lineY2 = chars.length * lineHeightPx - lineHeightPx * 0.1;
+      const lineY1 = colWidth * 0.1;
+      const lineY2 = chars.length * colWidth - colWidth * 0.1;
       ctx.fillRect(lineX, lineY1, underlineThickness, lineY2 - lineY1);
     }
   }
@@ -750,19 +755,24 @@ function drawTextOnCanvas(ctx, x, y, m, fillStyle) {
   ctx.restore();
 }
 
-// 计算文字的包围盒（未旋转，锚点在左上）
 function measureTextBBox(m) {
   const cvs = document.createElement('canvas');
   const ctx = cvs.getContext('2d');
   ctx.font = m.fontSpec;
 
   const lineHeightPx = m.size * m.lineHeight;
+  const ls = m.letterSpacing || 0;
   const lines = m.text.split('\n');
 
   if (m.direction === 'horizontal') {
     let maxW = 0;
     for (const line of lines) {
-      const w = ctx.measureText(line).width;
+      const chars = Array.from(line);
+      let w = 0;
+      for (let j = 0; j < chars.length; j++) {
+        w += ctx.measureText(chars[j]).width;
+        if (j < chars.length - 1) w += ls;
+      }
       if (w > maxW) maxW = w;
     }
     return {
@@ -770,18 +780,18 @@ function measureTextBBox(m) {
       h: Math.max(1, lines.length * lineHeightPx)
     };
   } else {
+    const colWidth = Math.max(1, lineHeightPx + ls);
     let maxChars = 0;
     for (const line of lines) {
       maxChars = Math.max(maxChars, Array.from(line).length);
     }
     return {
-      w: Math.max(1, lines.length * lineHeightPx),
-      h: Math.max(1, maxChars * lineHeightPx)
+      w: Math.max(1, lines.length * colWidth),
+      h: Math.max(1, maxChars * colWidth)
     };
   }
 }
 
-// ---------- 文字预览（侧边小画布） ----------
 function renderTextPreviewBox() {
   const cvs = $('textPreviewCanvas');
   if (!cvs) return;
@@ -804,7 +814,6 @@ function renderTextPreviewBox() {
   const bbox = measureTextBBox(m);
   if (bbox.w <= 0 || bbox.h <= 0) return;
 
-  // 旋转后的包围盒
   const rotRad = Math.abs(m.rotate) * Math.PI / 180;
   const cos = Math.abs(Math.cos(rotRad));
   const sin = Math.abs(Math.sin(rotRad));
@@ -818,7 +827,6 @@ function renderTextPreviewBox() {
     1
   );
 
-  // 让 bbox 中心落在画布中心所需的锚点偏移
   let cRelX = 0;
   if (m.align === 'left') cRelX = bbox.w / 2;
   else if (m.align === 'right') cRelX = -bbox.w / 2;
@@ -831,7 +839,6 @@ function renderTextPreviewBox() {
   ctx.restore();
 }
 
-// ---------- 画布上的文字预览（跟随鼠标） ----------
 function renderTextPreview(x, y) {
   ctxOverlay.clearRect(0, 0, W, H);
   const m = getTextMetrics();
@@ -863,7 +870,6 @@ function drawTextToDrawLayer(x, y) {
   return count > 0;
 }
 
-// ---------- UI ----------
 function setStatus(text, cls) {
   const el = $('status');
   el.textContent = text;
@@ -992,7 +998,6 @@ function updateLockUI() {
   }
 }
 
-// ---------- 显示到屏幕 ----------
 async function displayToScreen() {
   const btn = $('displayBtn');
   const originalText = btn.textContent;
@@ -1018,7 +1023,6 @@ async function displayToScreen() {
   }
 }
 
-// ---------- 事件 ----------
 function bindEvents() {
   document.querySelectorAll('.tool-btn').forEach(el => {
     el.addEventListener('click', () => {
@@ -1071,6 +1075,12 @@ function bindEvents() {
 
   $('lineHeightSlider').addEventListener('input', () => {
     $('lineHeightVal').textContent = parseFloat($('lineHeightSlider').value).toFixed(1);
+    renderTextPreviewBox();
+    if (textModeActive) ctxOverlay.clearRect(0, 0, W, H);
+  });
+
+  $('letterSpacingSlider').addEventListener('input', () => {
+    $('letterSpacingVal').textContent = $('letterSpacingSlider').value;
     renderTextPreviewBox();
     if (textModeActive) ctxOverlay.clearRect(0, 0, W, H);
   });

@@ -375,17 +375,21 @@ python gen_font.py SomeFont.ttf --check "∠・⌒"
 
 ### Flash 布局（`/www/fonts/`）
 
+> 仓库已经内置了 `base_*.{bin,idx,map}`（16 个字号，ASCII，共约 290 KB），开箱即可使用。下文的 `gen_font.py` 只在需要生成中文、自定义字符集或者替换字体族时才需要。
+
 **只放 ASCII 小字体**。Flash 只有 4MB，MicroPython 固件和 Web 资源已占 1~2MB。
+
 
 
 ```
 /www/fonts/
-├── base_12_0.bin      5KB
-├── base_12.idx
-├── base_24_0.bin      7KB
-├── base_24.idx
-├── base_32_0.bin     10KB    ← 开机画面用的 32px
-└── base_32.idx
+├── base_8_0.bin 1.8KB
+├── base_8.idx
+├── ...
+├── base_32_0.bin 10KB ← 开机画面默认用的 32px
+├── base_32.idx
+├── ...
+└── base_96_0.bin 75KB
 ```
 
 一个 ASCII 字号通常 5~10KB，三个字号不到 30KB。
@@ -488,20 +492,6 @@ from text_renderer import font_supports
 font_supports('/sd/e6/fonts/sourcehan_32_0.bin', '你')
 True
 ```
-
-### 生成的文件太大（几 MB）
-
-**中文字体的正常体积**。2 万字符 × 40 字节/字符 ≈ 800KB/字号，3 个字号 2.4MB。
-
-**缩小办法**：
-
-| 办法 | 效果 |
-| --- | --- |
-| 减小 --sizes（只生成 24, 32） | 线性缩小 |
-| 只生成常用字符（3500 常用字） | 缩到 15~20% |
-| 用 --chars 精确列举 | 按需，最小 |
-
-**放在哪**：SD 卡不心疼，Flash 只放 ASCII 小字体。
 
 ### 修改字体后前端还是旧字形
 
