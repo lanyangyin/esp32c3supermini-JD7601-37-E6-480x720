@@ -66,3 +66,4 @@ desktop.ini
 # ===== 保留空目录占位 =====
 !esp/www/fonts/.gitkeep
 !esp/sd/fonts/.gitkeep
+/ttf/
