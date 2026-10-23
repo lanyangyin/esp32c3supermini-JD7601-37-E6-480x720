@@ -44,7 +44,7 @@ MODE_NETINFO = 2     # 10
 MODE_DESIGNATED = 3  # 11
 
 # ---------- 其它配置 ----------
-FIXED_BOTTOM = ">>>>>>>>><<<<<<<<<<<<"
+FIXED_BOTTOM = ">>>>>>>>>>><<<<<<<<<<<<"
 GRAY_FILL = 'pseudo:0,1,4'
 TMP_BG_SD = '/sd/e6/bgs/__boot_bg__.bin'
 TMP_BG_FLASH = '/bgs/__boot_bg__.bin'
@@ -466,7 +466,7 @@ def _build_netinfo_text():
         "  ssid: %s\n"
         "  password: %s\n"
         "  ip: %s\n"
-        "--------------------------------------------\n"
+        "----------------------------------------\n"
         "sta:\n"
         "  ssid: %s\n"
         "  ip: %s\n"
@@ -513,7 +513,7 @@ def _render_netinfo(bg_path):
             'italic': False,
             'underline': False,
             'strikethrough': False,
-            'letter_spacing': 2,
+            'letter_spacing': 3,
         },
         align='left',
         valign='top',
