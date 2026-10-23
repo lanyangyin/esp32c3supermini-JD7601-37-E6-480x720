@@ -44,7 +44,7 @@ MODE_NETINFO = 2     # 10
 MODE_DESIGNATED = 3  # 11
 
 # ---------- 其它配置 ----------
-FIXED_BOTTOM = ">>>>>>>>>>><<<<<<<<<<<<"
+FIXED_BOTTOM = ">>>>>>>>>>>><<<<<<<<<<<<"
 GRAY_FILL = 'pseudo:0,1,4'
 TMP_BG_SD = '/sd/e6/bgs/__boot_bg__.bin'
 TMP_BG_FLASH = '/bgs/__boot_bg__.bin'
